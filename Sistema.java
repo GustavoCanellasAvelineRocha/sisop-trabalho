@@ -460,7 +460,34 @@ public class Sistema {
 	public class GMPaginacao{
 		public int tamPag;
 		public int tamMem;
-		public int tamframes;
+		public int tamFrames;
+		public boolean[] framesAlocados;
+
+		public GMPaginacao(int tamMem, int tamPag) {
+			this.tamPag = tamPag;
+			this.tamFrames = tamPag;
+			this.tamMem = tamMem;
+
+			int frames = tamMem / tamPag;
+			this.framesAlocados = new boolean[frames];
+		}
+
+		public boolean aloca(int nroPalavras,int[] tabelaPaginas){
+			int nroDePaginasNecessarias = nroPalavras/tamPag;
+
+			int framesDisponiveis=0;
+			for (boolean frame:framesAlocados) {
+				//verifica se o frame esta disponivel
+				if(frame) framesDisponiveis++;
+			}
+
+			//se o numero de paginas necessarias for maior que os frames disponiveis nao eh possivel alocar
+			if(nroDePaginasNecessarias>framesDisponiveis) return false;
+			else{
+
+				return true;
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------
