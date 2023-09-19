@@ -417,9 +417,9 @@ public class Sistema {
 			alocado = new boolean[numParticoes];
 		}
 
-		public int aloca(Word[] programa){
+		public int aloca(int programa){
 
-			int tamProg = programa.length;
+			int tamProg = programa;
 			if(tamProg>tamPart) return-1;
 
 			for (int i = 0; i<alocado.length-1; i++){
@@ -437,7 +437,7 @@ public class Sistema {
 		}
 
 		public int carga(Word[] programa){
-			int numPart = aloca(programa);
+			int numPart = aloca(programa.length);
 
 			var posicInicial = numPart*tamPart;
 			var posicFinal = posicInicial + tamPart;
@@ -472,21 +472,68 @@ public class Sistema {
 			this.framesAlocados = new boolean[frames];
 		}
 
-		public boolean aloca(int nroPalavras,int[] tabelaPaginas){
+		public boolean aloca(int nroPalavras,ArrayList<Integer> tabelaPaginas){
 			int nroDePaginasNecessarias = nroPalavras/tamPag;
 
 			int framesDisponiveis=0;
 			for (boolean frame:framesAlocados) {
 				//verifica se o frame esta disponivel
-				if(frame) framesDisponiveis++;
+				if(!frame) framesDisponiveis++;
 			}
 
 			//se o numero de paginas necessarias for maior que os frames disponiveis nao eh possivel alocar
 			if(nroDePaginasNecessarias>framesDisponiveis) return false;
 			else{
-
+				for(int i=0;i<nroDePaginasNecessarias;i++){
+					for (int j=0;j<framesAlocados.length;j++) {
+						if (!framesAlocados[j]){
+							framesAlocados[j]=true;
+							tabelaPaginas.add(j);
+							break;
+						}
+					}
+				}
 				return true;
 			}
+		}
+
+		public void desalocaPaginas(ArrayList<Integer> tabelaDePaginas) {
+			for (int p : tabelaDePaginas) {
+				framesAlocados[p]=false;
+			}
+		}
+
+		public ArrayList<Integer> carga(ArrayList<Integer> tabelaDePaginas){
+			//implementar
+			return new ArrayList<>();
+		}
+	}
+
+	public class GP{
+		private GMParticao gmParticao=null;
+		private GMPaginacao gmPaginacao=null;
+
+		public GP(GMParticao GM) {
+			this.gmParticao = GM;
+		}
+
+		public GP(GMPaginacao GM) {
+			this.gmPaginacao = GM;
+		}
+
+		public boolean criaProcesso(Word[] programa){
+
+			var tamanhoPrograma = programa.length;
+
+
+			//cria a PCB
+
+			return true;
+		}
+
+		public void desalocaProcesso(int id){
+
+
 		}
 	}
 
