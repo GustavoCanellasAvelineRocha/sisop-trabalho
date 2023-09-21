@@ -436,13 +436,17 @@ public class Sistema {
 			alocado[part] = false;
 		}
 
-		public int carga(Word[] programa){
+		public int carga(int enderecoLogico, Word[] programa){
+			//considerar tirar isso daqui para o GP
 			int numPart = aloca(programa.length);
 
-			var posicInicial = numPart*tamPart;
-			var posicFinal = posicInicial + tamPart;
+			//retorno caso nao seja possivel alocar a memoria
+			if(numPart==-1)return -1;
+
+			int enderecoFisico = traducao(numPart);
+			var enderecoFisicoFinal = enderecoFisico + tamPart;
 			var posicPrograma = 0;
-			for (int i = posicInicial; i<posicFinal; i++){
+			for (int i = enderecoFisico; i<enderecoFisicoFinal; i++){
 				if(programa[posicPrograma]!=null){
 					memory.m[i] = programa[posicPrograma];
 				}else{
@@ -452,9 +456,12 @@ public class Sistema {
 
 				posicPrograma++;
 			}
-			return numPart;
+			return enderecoFisico;
 		}
 
+		public int traducao(int enderecoLogico){
+			return enderecoLogico*tamPart;
+		}
 	}
 
 	public class GMPaginacao{
@@ -462,17 +469,20 @@ public class Sistema {
 		public int tamMem;
 		public int tamFrames;
 		public boolean[] framesAlocados;
+		public Memory memory;
 
-		public GMPaginacao(int tamMem, int tamPag) {
+
+		public GMPaginacao(int tamMem, int tamPag,Memory memory) {
 			this.tamPag = tamPag;
 			this.tamFrames = tamPag;
 			this.tamMem = tamMem;
+			this.memory=memory;
 
 			int frames = tamMem / tamPag;
 			this.framesAlocados = new boolean[frames];
 		}
 
-		public boolean aloca(int nroPalavras,ArrayList<Integer> tabelaPaginas){
+		public boolean aloca(int nroPalavras, ArrayList<Integer> tabelaPaginas){
 			int nroDePaginasNecessarias = nroPalavras/tamPag;
 
 			int framesDisponiveis=0;
@@ -503,15 +513,40 @@ public class Sistema {
 			}
 		}
 
-		public ArrayList<Integer> carga(ArrayList<Integer> tabelaDePaginas){
-			//implementar
-			return new ArrayList<>();
+		public ArrayList<Integer> translate(ArrayList<Integer> tabelaDePaginas){
+			ArrayList<Integer> tabelaDePaginasTraduzida = new ArrayList<>();
+			for (int enderecoLogico:tabelaDePaginas) {
+				int enderecoFisico = enderecoLogico*tamFrames;
+				tabelaDePaginasTraduzida.add(enderecoFisico);
+			}
+
+			return tabelaDePaginasTraduzida;
+		}
+
+		public ArrayList<Integer> carga(Word[] programa,ArrayList<Integer> tabelaDePaginas){
+			ArrayList<Integer> tabelaDePaginasTraduzida = translate(tabelaDePaginas);
+
+			int posicaoPrograma=0;
+
+			for (int enderecoFisico: tabelaDePaginasTraduzida) {
+				int enderecoFinalPagina = enderecoFisico+tamFrames-1;
+				for(int i=enderecoFisico;i<enderecoFinalPagina;i++){
+					if(programa[posicaoPrograma]!=null){
+						memory.m[enderecoFisico] = programa[posicaoPrograma];
+					}else break;
+				}
+			}
+
+			return tabelaDePaginasTraduzida;
 		}
 	}
 
 	public class GP{
-		private GMParticao gmParticao=null;
-		private GMPaginacao gmPaginacao=null;
+		public ArrayList<PCBparticao> listaDeProcessosProntosParticao = new ArrayList<>();
+
+		public ArrayList<PCBpaginacao> listaDeProcessosProntosPaginacao = new ArrayList<>();
+		public GMParticao gmParticao=null;
+		public GMPaginacao gmPaginacao=null;
 
 		public GP(GMParticao GM) {
 			this.gmParticao = GM;
@@ -523,17 +558,122 @@ public class Sistema {
 
 		public boolean criaProcesso(Word[] programa){
 
-			var tamanhoPrograma = programa.length;
+			if(gmParticao!=null){
 
+				int enderecoLogico = gmParticao.aloca(programa.length);
 
-			//cria a PCB
+				//programa maior que a particao
+				if(enderecoLogico == -1)return false;
+				else{
+					int id = listaDeProcessosProntosParticao.size();
+					int particao = gmParticao.carga(enderecoLogico,programa);
+					PCBparticao pcb = new PCBparticao(id,particao);
+					listaDeProcessosProntosParticao.add(pcb);
+					return true;
+				}
 
-			return true;
+			}else {
+				ArrayList<Integer> tabelaDePaginas = new ArrayList<>();
+				boolean temEspaco = gmPaginacao.aloca(programa.length, tabelaDePaginas);
+
+				if(!temEspaco) return false;
+				else{
+					int id = listaDeProcessosProntosPaginacao.size();
+					ArrayList<Integer> tabelaDePaginasTraduzida = gmPaginacao.carga(programa,tabelaDePaginas);
+					PCBpaginacao pcb = new PCBpaginacao(id,tabelaDePaginasTraduzida);
+					listaDeProcessosProntosPaginacao.add(pcb);
+					return true;
+				}
+			}
 		}
 
 		public void desalocaProcesso(int id){
+			if(gmParticao!=null){
+				for (PCBparticao processo:listaDeProcessosProntosParticao) {
+					if(processo.getId() == id){
+						int enderecoLogico = processo.getParticao()/ gmParticao.tamPart;
+						gmParticao.desaloca(enderecoLogico);
+
+						//fazer desalocacao da memoria logica
 
 
+					}
+				}
+			}else {
+
+			}
+		}
+	}
+
+	public class PCBparticao {
+		private int id;
+		private String state;
+		private int particao;
+
+		public PCBparticao(int id, int particao) {
+			this.id = id;
+			this.state = "Ready";
+			this.particao = particao;
+		}
+
+		public int getId() {
+			return id;
+		}
+
+		public void setId(int id) {
+			this.id = id;
+		}
+
+		public String getState() {
+			return state;
+		}
+
+		public void setState(String state) {
+			this.state = state;
+		}
+
+		public int getParticao() {
+			return particao;
+		}
+
+		public void setParticao(int particao) {
+			this.particao = particao;
+		}
+	}
+
+	public class PCBpaginacao {
+		private int id;
+		private String state;
+		private ArrayList<Integer> tabelaDePaginas;
+
+		public PCBpaginacao(int id, ArrayList<Integer> tabelaDePaginas) {
+			this.id = id;
+			this.state = "Ready";
+			this.tabelaDePaginas = tabelaDePaginas;
+		}
+
+		public int getId() {
+			return id;
+		}
+
+		public void setId(int id) {
+			this.id = id;
+		}
+
+		public String getState() {
+			return state;
+		}
+
+		public void setState(String state) {
+			this.state = state;
+		}
+
+		public ArrayList<Integer> getTabelaDePaginas() {
+			return tabelaDePaginas;
+		}
+
+		public void setTabelaDePaginas(ArrayList<Integer> tabelaDePaginas) {
+			this.tabelaDePaginas = tabelaDePaginas;
 		}
 	}
 
