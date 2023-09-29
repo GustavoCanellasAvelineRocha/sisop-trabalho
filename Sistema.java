@@ -7,7 +7,8 @@
 //    SW = tratamento int e chamada de sistema
 // Funcionalidades de carga, execução e dump de memória
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Scanner;
 
 public class Sistema {
 	
@@ -103,8 +104,7 @@ public class Sistema {
 		}
 		
 		private boolean legal(int e) {                             // todo acesso a memoria tem que ser verificado
-			// ????
-			return true;
+			return e <= limite;
 		}
 
 		private boolean testOverflow(int v) {                       // toda operacao matematica deve avaliar se ocorre overflow                      
@@ -316,6 +316,7 @@ public class Sistema {
 							break;
 					}
 				}
+				else break;
 			   // --------------------------------------------------------------------------------------------------
 			   // VERIFICA INTERRUPÇÃO !!! - TERCEIRA FASE DO CICLO DE INSTRUÇÕES
 				if (!(irpt == Interrupts.noInterrupt)) {   // existe interrupção
@@ -336,14 +337,19 @@ public class Sistema {
 		public int tamMem;    
         public Word[] m;  
 		public Memory mem;   
-        public CPU cpu;    
+        public CPU cpu;
+		public GP gp;
 
-        public VM(InterruptHandling ih, SysCallHandling sysCall){   
+		public VM(InterruptHandling ih, SysCallHandling sysCall){
 		 // vm deve ser configurada com endereço de tratamento de interrupcoes e de chamadas de sistema
 	     // cria memória
 		     tamMem = 1024;
   		 	 mem = new Memory(tamMem);
 			 m = mem.m;
+		// cria gerente de processos
+		//PERGUNTAR PRO SOR SE EH AQUI!
+			gp = new GP(new GMParticao(128,mem));
+			//gp = new GP(new GMPaginacao(mem.tamMem,8,mem));
 	  	 // cria cpu
 			 cpu = new CPU(mem,ih,sysCall, true);                   // true liga debug
 	    }	
@@ -403,6 +409,23 @@ public class Sistema {
 				vm.mem.dump(0, p.length);            // dump da memoria com resultado
 	}
 
+	//funcao de execucao
+	private void executa(int id){
+		if(this.vm.gp.gmParticao!=null){
+			var processo = this.vm.gp.listaDeProcessosProntosParticao.get(id);
+
+			vm.cpu.setContext(0,processo.limit, processo.pc);
+			vm.cpu.run();
+		}else{
+			var processo = this.vm.gp.listaDeProcessosProntosPaginacao.get(id);
+
+			for (Pagina pagina:processo.tabelaDePaginas) {
+				vm.cpu.setContext(0, pagina.limit, pagina.pc);
+				vm.cpu.run();
+			}
+		}
+	}
+
 	public class GMParticao{
 		public int tamPart;
 		public int numParticoes;
@@ -438,16 +461,16 @@ public class Sistema {
 
 		public int carga(int enderecoLogico, Word[] programa){
 			//considerar tirar isso daqui para o GP
-			int numPart = aloca(programa.length);
+			//int numPart = aloca(programa.length);
 
 			//retorno caso nao seja possivel alocar a memoria
-			if(numPart==-1)return -1;
+			//if(numPart==-1)return -1;
 
-			int enderecoFisico = traducao(numPart);
+			int enderecoFisico = traducao(enderecoLogico);
 			var enderecoFisicoFinal = enderecoFisico + tamPart;
 			var posicPrograma = 0;
-			for (int i = enderecoFisico; i<enderecoFisicoFinal; i++){
-				if(programa[posicPrograma]!=null){
+			for (int i = enderecoFisico; i<enderecoFisicoFinal-1; i++){
+				if(posicPrograma<programa.length-1){
 					memory.m[i] = programa[posicPrograma];
 				}else{
 					//ver isso aqui, registradores
@@ -456,7 +479,7 @@ public class Sistema {
 
 				posicPrograma++;
 			}
-			return enderecoFisico;
+			return enderecoLogico;
 		}
 
 		public int traducao(int enderecoLogico){
@@ -492,9 +515,8 @@ public class Sistema {
 			}
 
 			//se o numero de paginas necessarias for maior que os frames disponiveis nao eh possivel alocar
-			if(nroDePaginasNecessarias>framesDisponiveis) return false;
-			else{
-				for(int i=0;i<nroDePaginasNecessarias;i++){
+			if(nroDePaginasNecessarias<framesDisponiveis) {
+				for(int i=0;i<=nroDePaginasNecessarias;i++){
 					for (int j=0;j<framesAlocados.length;j++) {
 						if (!framesAlocados[j]){
 							framesAlocados[j]=true;
@@ -505,6 +527,9 @@ public class Sistema {
 				}
 				return true;
 			}
+			else{
+				return false;
+			}
 		}
 
 		public void desalocaPaginas(ArrayList<Integer> tabelaDePaginas) {
@@ -513,26 +538,28 @@ public class Sistema {
 			}
 		}
 
-		public ArrayList<Integer> translate(ArrayList<Integer> tabelaDePaginas){
-			ArrayList<Integer> tabelaDePaginasTraduzida = new ArrayList<>();
+		public ArrayList<Pagina> translate(ArrayList<Integer> tabelaDePaginas){
+			ArrayList<Pagina> tabelaDePaginasTraduzida = new ArrayList<>();
 			for (int enderecoLogico:tabelaDePaginas) {
 				int enderecoFisico = enderecoLogico*tamFrames;
-				tabelaDePaginasTraduzida.add(enderecoFisico);
+				int enderecoLimite = enderecoFisico+tamFrames;
+				System.out.println(enderecoLimite);
+				tabelaDePaginasTraduzida.add(new Pagina(enderecoLogico,enderecoFisico,enderecoLimite));
 			}
 
 			return tabelaDePaginasTraduzida;
 		}
 
-		public ArrayList<Integer> carga(Word[] programa,ArrayList<Integer> tabelaDePaginas){
-			ArrayList<Integer> tabelaDePaginasTraduzida = translate(tabelaDePaginas);
+		public ArrayList<Pagina> carga(Word[] programa,ArrayList<Integer> tabelaDePaginas){
+			ArrayList<Pagina> tabelaDePaginasTraduzida = translate(tabelaDePaginas);
 
 			int posicaoPrograma=0;
 
-			for (int enderecoFisico: tabelaDePaginasTraduzida) {
-				int enderecoFinalPagina = enderecoFisico+tamFrames-1;
-				for(int i=enderecoFisico;i<enderecoFinalPagina;i++){
-					if(programa[posicaoPrograma]!=null){
-						memory.m[enderecoFisico] = programa[posicaoPrograma];
+			for (Pagina pagina: tabelaDePaginasTraduzida) {
+				for(int i=pagina.pc;i<pagina.limit;i++){
+					if(posicaoPrograma<programa.length){
+						memory.m[i] = programa[posicaoPrograma];
+						posicaoPrograma++;
 					}else break;
 				}
 			}
@@ -567,11 +594,11 @@ public class Sistema {
 				else{
 					int id = listaDeProcessosProntosParticao.size();
 					int particao = gmParticao.carga(enderecoLogico,programa);
-					PCBparticao pcb = new PCBparticao(id,particao);
+					int enderecoFisico = gmParticao.traducao(enderecoLogico);
+					PCBparticao pcb = new PCBparticao(id,particao, enderecoFisico, enderecoFisico+ gmParticao.tamPart);
 					listaDeProcessosProntosParticao.add(pcb);
 					return true;
 				}
-
 			}else {
 				ArrayList<Integer> tabelaDePaginas = new ArrayList<>();
 				boolean temEspaco = gmPaginacao.aloca(programa.length, tabelaDePaginas);
@@ -579,7 +606,7 @@ public class Sistema {
 				if(!temEspaco) return false;
 				else{
 					int id = listaDeProcessosProntosPaginacao.size();
-					ArrayList<Integer> tabelaDePaginasTraduzida = gmPaginacao.carga(programa,tabelaDePaginas);
+					ArrayList<Pagina> tabelaDePaginasTraduzida = gmPaginacao.carga(programa,tabelaDePaginas);
 					PCBpaginacao pcb = new PCBpaginacao(id,tabelaDePaginasTraduzida);
 					listaDeProcessosProntosPaginacao.add(pcb);
 					return true;
@@ -591,29 +618,95 @@ public class Sistema {
 			if(gmParticao!=null){
 				for (PCBparticao processo:listaDeProcessosProntosParticao) {
 					if(processo.getId() == id){
-						int enderecoLogico = processo.getParticao()/ gmParticao.tamPart;
+						int enderecoLogico = processo.getParticao();
 						gmParticao.desaloca(enderecoLogico);
 
+						System.out.println("aqui");
+
 						//fazer desalocacao da memoria logica
+						for (int i = (gmParticao.traducao(processo.particao));i< processo.limit;i++) {
+							gmParticao.memory.m[i] = new Word(Opcode.___, -1,-1,-1);
+						}
 
-
+						System.out.println("aqui");
 					}
 				}
 			}else {
-
+				for (PCBpaginacao processo:listaDeProcessosProntosPaginacao) {
+					if(processo.getId() == id){
+						//implementar pag desaloca
+					}
+				}
 			}
 		}
 	}
+
+//	public class PCB {
+//		private int id;
+//		private String state;
+//		private int particao;
+//
+//		private ArrayList<Integer> tabelaDePaginas;
+//
+//		public PCB(int id, int particao) {
+//			this.id = id;
+//			this.state = "Ready";
+//			this.particao = particao;
+//		}
+//
+//		public PCB(int id, ArrayList<Integer> tabelaDePaginas) {
+//			this.id = id;
+//			this.state = "Ready";
+//			this.tabelaDePaginas = tabelaDePaginas;
+//		}
+//
+//		public int getId() {
+//			return id;
+//		}
+//
+//		public void setId(int id) {
+//			this.id = id;
+//		}
+//
+//		public String getState() {
+//			return state;
+//		}
+//
+//		public void setState(String state) {
+//			this.state = state;
+//		}
+//
+//		public int getParticao() {
+//			return particao;
+//		}
+//
+//		public void setParticao(int particao) {
+//			this.particao = particao;
+//		}
+//
+//		public ArrayList<Integer> getTabelaDePaginas() {
+//			return tabelaDePaginas;
+//		}
+//
+//		public void setTabelaDePaginas(ArrayList<Integer> tabelaDePaginas) {
+//			this.tabelaDePaginas = tabelaDePaginas;
+//		}
+//	}
 
 	public class PCBparticao {
 		private int id;
 		private String state;
 		private int particao;
+		private int pc;
+		private int limit;
 
-		public PCBparticao(int id, int particao) {
+
+		public PCBparticao(int id, int particao,int pc,int limit) {
 			this.id = id;
 			this.state = "Ready";
 			this.particao = particao;
+			this.pc = pc;
+			this.limit = limit;
 		}
 
 		public int getId() {
@@ -644,9 +737,9 @@ public class Sistema {
 	public class PCBpaginacao {
 		private int id;
 		private String state;
-		private ArrayList<Integer> tabelaDePaginas;
+		private ArrayList<Pagina> tabelaDePaginas;
 
-		public PCBpaginacao(int id, ArrayList<Integer> tabelaDePaginas) {
+		public PCBpaginacao(int id, ArrayList<Pagina> tabelaDePaginas) {
 			this.id = id;
 			this.state = "Ready";
 			this.tabelaDePaginas = tabelaDePaginas;
@@ -668,14 +761,40 @@ public class Sistema {
 			this.state = state;
 		}
 
-		public ArrayList<Integer> getTabelaDePaginas() {
+		public ArrayList<Pagina> getTabelaDePaginas() {
 			return tabelaDePaginas;
 		}
 
-		public void setTabelaDePaginas(ArrayList<Integer> tabelaDePaginas) {
+		public void setTabelaDePaginas(ArrayList<Pagina> tabelaDePaginas) {
 			this.tabelaDePaginas = tabelaDePaginas;
 		}
 	}
+
+	//para execucao
+	public class Pagina{
+		private int pagina;
+		private int pc;
+		private int limit;
+
+		public Pagina(int pagina, int pc, int limit) {
+			this.pagina = pagina;
+			this.pc = pc;
+			this.limit = limit;
+		}
+
+		public int getPagina() {
+			return pagina;
+		}
+
+		public int getPc() {
+			return pc;
+		}
+
+		public int getLimit() {
+			return limit;
+		}
+	}
+
 
 	// -------------------------------------------------------------------------------------------------------
     // -------------------  S I S T E M A --------------------------------------------------------------------
@@ -691,6 +810,120 @@ public class Sistema {
 		 vm = new VM(ih, sysCall);
 		 sysCall.setVM(vm);
 		 progs = new Programas();
+
+	}
+
+	public static class InterfaceUsuario {
+
+		public InterfaceUsuario(Sistema s) {
+			boolean SystemRun = true;
+			Scanner scanner = new Scanner(System.in);
+			while (SystemRun) {
+
+				System.out.println("Selecione o comando que deseja:");
+				System.out.println("[1] Cria processo");
+				System.out.println("[2] Executa");
+				System.out.println("[3] Dump");
+				System.out.println("[4] DumpM");
+				System.out.println("[5] Lista processos");
+				System.out.println("[6] Desaloca");
+				System.out.println("[7] Trace ON/Trace OFF");
+				System.out.println("[0] Exit");
+
+				String comando = scanner.nextLine();
+				try {
+					switch (comando) {
+
+						case "1":
+							System.out.println("Selecione o programa que deseja");
+							System.out.println("[1] fatorial");
+							System.out.println("[2] fatorialTRAP");
+							System.out.println("[3] progMinimo");
+							System.out.println("[4] fibonacci10");
+							System.out.println("[5] PC");
+							String programa = scanner.nextLine();
+							boolean result;
+							switch (programa) {
+								case "1":
+									result = s.vm.gp.criaProcesso(progs.fatorial);
+									System.out.println("Resultado da criacao:" + result);
+									break;
+								case "2":
+									result = s.vm.gp.criaProcesso(progs.fatorialTRAP);
+									System.out.println("Resultado da criacao:" + result);
+									break;
+								case "3":
+									result = s.vm.gp.criaProcesso(progs.progMinimo);
+									System.out.println("Resultado da criacao:" + result);
+									break;
+								case "4":
+									result = s.vm.gp.criaProcesso(progs.fibonacci10);
+									System.out.println("Resultado da criacao:" + result);
+									break;
+								case "5":
+									result = s.vm.gp.criaProcesso(progs.PC);
+									System.out.println("Resultado da criacao:" + result);
+									break;
+								default:
+									System.out.println("Opcao invalida");
+									break;
+							}
+							break;
+						case "2":
+							System.out.println("Digite o ID do programa que deseja executar");
+							String idString = scanner.nextLine();
+							int id = Integer.parseInt(idString);
+							s.executa(id);
+							break;
+						case "3":
+							System.out.println("Digite o ID do programa que deseja fazer Dump");
+							idString = scanner.nextLine();
+							id = Integer.parseInt(idString);
+							var processo = s.vm.gp.listaDeProcessosProntosPaginacao.get(id);
+							s.vm.mem.dump(processo.tabelaDePaginas.get(0).pc, processo.tabelaDePaginas.get(0).getLimit());
+							break;
+						case "4":
+							int indiceInicial;
+							int indiceFinal;
+
+							System.out.println("Digite o indice inicial da memoria");
+							idString = scanner.nextLine();
+							indiceInicial = Integer.parseInt(idString);
+							System.out.println("Digite o indice final da memoria");
+							idString = scanner.nextLine();
+							indiceFinal = Integer.parseInt(idString);
+
+							s.vm.mem.dump(indiceInicial, indiceFinal);
+							break;
+						case "lista-processos":
+							
+							break;
+						case "6":
+							System.out.println("Digite o id do processo");
+							idString = scanner.nextLine();
+							id = Integer.parseInt(idString);
+
+							s.vm.gp.desalocaProcesso(id);
+							break;
+						case "TraceON/OFF":
+
+							break;
+						case "0":
+							System.out.println("Encerrando...");
+							SystemRun = false;
+							break;
+						default:
+							System.out.println("Comando invalido, tente novamente");
+							break;
+					}
+				} catch (Exception e) {
+					System.err.println(e);
+				}
+
+			}
+
+		}
+
 	}
 
     // -------------------  S I S T E M A - fim --------------------------------------------------------------
@@ -699,10 +932,11 @@ public class Sistema {
     // -------------------------------------------------------------------------------------------------------
     // ------------------- instancia e testa sistema
 	public static void main(String args[]) {
-		Sistema s = new Sistema();			
+		Sistema s = new Sistema();
+		new InterfaceUsuario(s);
 		//s.loadAndExec(progs.fibonacci10);
 		//s.loadAndExec(progs.progMinimo);
-		s.loadAndExec(progs.fatorial);
+		//s.loadAndExec(progs.fatorial);
 		//s.loadAndExec(progs.fatorialTRAP); // saida
 		//s.loadAndExec(progs.fibonacciTRAP); // entrada
 		//s.loadAndExec(progs.PC); // bubble sort
