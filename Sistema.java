@@ -8,8 +8,7 @@
 // Funcionalidades de carga, execução e dump de memória
 
 import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.Objects;
 import java.util.Scanner;
 
 public class Sistema {
@@ -93,6 +92,7 @@ public class Sistema {
 		private InterruptHandling ih;     // significa desvio para rotinas de tratamento de  Int - se int ligada, desvia
         private SysCallHandling sysCall;  // significa desvio para tratamento de chamadas de sistema - trap 
 		private boolean debug;            // se true entao mostra cada instrucao em execucao
+		private ArrayList<Pagina> tabelaDePaginas;
 						
 		public CPU(Memory _mem, InterruptHandling _ih, SysCallHandling _sysCall, boolean _debug) {     // ref a MEMORIA e interrupt handler passada na criacao da CPU
 			maxInt =  32767;        // capacidade de representacao modelada
@@ -106,7 +106,13 @@ public class Sistema {
 		}
 		
 		private boolean legal(int e) {                             // todo acesso a memoria tem que ser verificado
-			return e <= limite;
+			if(tabelaDePaginas==null) return e <= limite;
+			else {
+				for (Pagina processo:tabelaDePaginas) {
+					if (processo.pc<e && processo.limit>e) return true;
+				}
+				return false;
+			}
 		}
 
 		private boolean testOverflow(int v) {                       // toda operacao matematica deve avaliar se ocorre overflow                      
@@ -117,14 +123,16 @@ public class Sistema {
 			return true;
 		}
 		
-		public void setContext(int _base, int _limite, int _pc) {  // no futuro esta funcao vai ter que ser 
+		public void setContext(int _base, int _limite, int _pc,ArrayList<Pagina> _tabelaDePaginas) {  // no futuro esta funcao vai ter que ser
 			base = _base;                                          // expandida para setar todo contexto de execucao,
 			limite = _limite;									   // agora,  setamos somente os registradores base,
 			pc = _pc;                                              // limite e pc (deve ser zero nesta versao)
 			irpt = Interrupts.noInterrupt;                         // reset da interrupcao registrada
+			tabelaDePaginas = _tabelaDePaginas;
 		}
 		
-		public void run() { 		// execucao da CPU supoe que o contexto da CPU, vide acima, esta devidamente setado			
+		public void run() {
+			// execucao da CPU supoe que o contexto da CPU, vide acima, esta devidamente setado
 			while (true) { 			// ciclo de instrucoes. acaba cfe instrucao, veja cada caso.
 			   // --------------------------------------------------------------------------------------------------
 			   // FETCH
@@ -340,7 +348,6 @@ public class Sistema {
         public Word[] m;  
 		public Memory mem;   
         public CPU cpu;
-		public GP gp;
 
 		public VM(InterruptHandling ih, SysCallHandling sysCall){
 		 // vm deve ser configurada com endereço de tratamento de interrupcoes e de chamadas de sistema
@@ -348,10 +355,6 @@ public class Sistema {
 		     tamMem = 1024;
   		 	 mem = new Memory(tamMem);
 			 m = mem.m;
-		// cria gerente de processos
-		//PERGUNTAR PRO SOR SE EH AQUI!
-			//gp = new GP(new GMParticao(128,mem));
-			gp = new GP(new GMPaginacao(mem.tamMem,8,mem));
 	  	 // cria cpu
 			 cpu = new CPU(mem,ih,sysCall, true);                   // true liga debug
 	    }	
@@ -404,7 +407,7 @@ public class Sistema {
 		loadProgram(p);    // carga do programa na memoria
 				System.out.println("---------------------------------- programa carregado na memoria");
 				vm.mem.dump(0, p.length);            // dump da memoria nestas posicoes				
-		vm.cpu.setContext(0, vm.tamMem - 1, 0);      // seta estado da cpu ]
+		//vm.cpu.setContext(0, vm.tamMem - 1, 0);      // seta estado da cpu ]
 				System.out.println("---------------------------------- inicia execucao ");
 		vm.cpu.run();                                // cpu roda programa ate parar	
 				System.out.println("---------------------------------- memoria após execucao ");
@@ -413,21 +416,30 @@ public class Sistema {
 
 	//funcao de execucao
 	private boolean executa(int id){
-		if(this.vm.gp.gmParticao!=null){
-			PCBparticao processo = this.vm.gp.getProcessoPeloIdParticao(id);
+		if(this.gp.gmParticao!=null){
+			PCBparticao processo = this.gp.getProcessoPeloIdParticao(id);
 
 			if(processo==null)return false;
 
-			processo.state = "Rodando";
-			vm.cpu.setContext(0,processo.limit, processo.pc);
+			PCBparticao processoRodando = this.gp.getProcessoRodandoParticao();
+
+			if(processoRodando!=null) processoRodando.setEstado("Pronto");
+
+			processo.setEstado("Rodando");
+			vm.cpu.setContext(0,processo.limit, processo.pc,null);
 			vm.cpu.run();
 		}else{
-			PCBpaginacao processo = this.vm.gp.getProcessoPeloIdPaginacao(id);
+			PCBpaginacao processo = this.gp.getProcessoPeloIdPaginacao(id);
 
 			if (processo==null)return false;
 
+			PCBpaginacao processoRodando = this.gp.getProcessoRodandoPaginacao();
+
+			if(processoRodando!=null) processoRodando.setEstado("Pronto");
+
+			processo.setEstado("Rodando");
 			for (Pagina pagina:processo.tabelaDePaginas) {
-				vm.cpu.setContext(0, pagina.limit, pagina.pc);
+				vm.cpu.setContext(0, pagina.limit, pagina.pc,processo.tabelaDePaginas);
 				vm.cpu.run();
 			}
 		}
@@ -435,61 +447,74 @@ public class Sistema {
 	}
 
 	private void dumpProcesso(int id){
-		if(this.vm.gp.gmParticao!=null){
-			var processo = this.vm.gp.getProcessoPeloIdParticao(id);
+		if(this.gp.gmParticao!=null){
+			var processo = this.gp.getProcessoPeloIdParticao(id);
 
-			System.out.println();
-			System.out.println("Id do processo: " + processo.id);
-			System.out.println("Particao do processo: " + processo.particao);
-			System.out.println("Program Counter do processo: " + processo.pc);
-			System.out.println("Limite do processo: " + processo.limit);
-			System.out.println("Estado do processo:" + processo.state);
-			System.out.println("Conteudo do processo:");
-			this.vm.mem.dump(processo.pc,processo.limit);
-		}else{
-			var processo = this.vm.gp.getProcessoPeloIdPaginacao(id);
-			Queue<Integer> listaPc = new LinkedList();
-			Queue<Integer>  listaLimit = new LinkedList();
-
-			System.out.println();
-			System.out.println("Id do processo = " + processo.id);
-			System.out.println("Estado do processo = " + processo.state);
-			for (Pagina pagina:processo.tabelaDePaginas) {
-				System.out.println("Pagina do processo = " + pagina.pagina);
-				System.out.println("Program Counter do processo = " + pagina.pc);
-				System.out.println("Limite do processo = " + pagina.limit);
-
-				listaPc.add(pagina.getPc());
-				listaLimit.add(pagina.getLimit());
+			if(processo==null) System.out.println("Processo nao encontrado, verifique a lista de processos ativos!");
+			else{
+				System.out.println();
+				System.out.println("Id do processo: " + processo.id);
+				System.out.println("Particao do processo: " + processo.particao);
+				System.out.println("Program Counter do processo: " + processo.pc);
+				System.out.println("Limite do processo: " + processo.limit);
+				System.out.println("Estado do processo:" + processo.estado);
+				System.out.println("Conteudo do processo:");
+				this.vm.mem.dump(processo.pc,processo.limit+1);
 			}
-			System.out.println("Conteudo do processo:");
-			while(!listaPc.isEmpty()){
-				this.vm.mem.dump(listaPc.remove(),listaLimit.remove());
+		}else{
+			var processo = this.gp.getProcessoPeloIdPaginacao(id);
+
+			if(processo==null) System.out.println("Processo nao encontrado, verifique a lista de processos ativos!");
+			else {
+				ArrayList<Integer> listaPc = new ArrayList<Integer>();
+				ArrayList<Integer>  listaLimit = new ArrayList<Integer>();
+
+				System.out.println();
+				System.out.println("Id do processo = " + processo.id);
+				System.out.println("Estado do processo = " + processo.estado);
+				for (Pagina pagina:processo.tabelaDePaginas) {
+					System.out.println("Pagina do processo = " + pagina.pagina);
+					System.out.println("Program Counter do processo = " + pagina.pc);
+					System.out.println("Limite do processo = " + pagina.limit);
+
+					listaPc.add(pagina.getPc());
+					listaLimit.add(pagina.getLimit());
+				}
+				System.out.println("Conteudo do processo:");
+				for (int i=0;i<listaPc.size();i++){
+					this.vm.mem.dump(listaPc.get(i),listaLimit.get(i)+1);
+				}
 			}
 		}
 	}
 
 	private void listaProcessos(){
-		if(this.vm.gp.gmParticao!=null){
-			ArrayList<PCBparticao> listaProcessos = this.vm.gp.listaDeProcessosProntosParticao;
-			for (PCBparticao processo:listaProcessos) {
-				System.out.println();
-				System.out.println("Id do processo = " + processo.id);
-				System.out.println("Particao do processo = " + processo.particao);
-				System.out.println("Program Counter do processo = " + processo.pc);
-				System.out.println("Limite do processo = " + processo.limit);
-				System.out.println("Estado do processo = " + processo.state);
+		if(this.gp.gmParticao!=null){
+			ArrayList<PCBparticao> listaProcessos = this.gp.listaDeProcessosProntosParticao;
+			if(listaProcessos.isEmpty()) System.out.println("Lista de processos vazia.");
+			else{
+				for (PCBparticao processo:listaProcessos) {
+					System.out.println();
+					System.out.println("Id do processo = " + processo.id);
+					System.out.println("Particao do processo = " + processo.particao);
+					System.out.println("Program Counter do processo = " + processo.pc);
+					System.out.println("Limite do processo = " + processo.limit);
+					System.out.println("Estado do processo = " + processo.estado);
+				}
 			}
 		}else{
-			ArrayList<PCBpaginacao> listaProcessos = this.vm.gp.listaDeProcessosProntosPaginacao;
-			for (PCBpaginacao processo:listaProcessos) {
-				System.out.println();
-				System.out.println("Id do processo = " + processo.id);
-				System.out.println("Estado do processo = " + processo.state);
-				for (Pagina pagina:processo.tabelaDePaginas) {
-					System.out.println("Pagina do processo = " + pagina.pagina);
-					System.out.println("Program Counter do processo = " + pagina.pc);
-					System.out.println("Limite do processo = " + pagina.limit);
+			ArrayList<PCBpaginacao> listaProcessos = this.gp.listaDeProcessosProntosPaginacao;
+			if(listaProcessos.isEmpty()) System.out.println("Lista de processos vazia");
+			else {
+				for (PCBpaginacao processo:listaProcessos) {
+					System.out.println();
+					System.out.println("Id do processo = " + processo.id);
+					System.out.println("Estado do processo = " + processo.estado);
+					for (Pagina pagina:processo.tabelaDePaginas) {
+						System.out.println("Pagina do processo = " + pagina.pagina);
+						System.out.println("Program Counter do processo = " + pagina.pc);
+						System.out.println("Limite do processo = " + pagina.limit);
+					}
 				}
 			}
 		}
@@ -529,20 +554,14 @@ public class Sistema {
 		}
 
 		public int carga(int enderecoLogico, Word[] programa){
-			//considerar tirar isso daqui para o GP
-			//int numPart = aloca(programa.length);
 
-			//retorno caso nao seja possivel alocar a memoria
-			//if(numPart==-1)return -1;
-
-			int enderecoFisico = traducao(enderecoLogico);
+			int enderecoFisico = traducao(enderecoLogico,0);
 			var enderecoFisicoFinal = enderecoFisico + tamPart;
 			var posicPrograma = 0;
 			for (int i = enderecoFisico; i<enderecoFisicoFinal-1; i++){
 				if(posicPrograma<programa.length-1){
 					memory.m[i] = programa[posicPrograma];
 				}else{
-					//ver isso aqui, registradores
 					memory.m[i] = new Word(Opcode.___, -1,-1,-1);
 				}
 
@@ -551,8 +570,9 @@ public class Sistema {
 			return enderecoLogico;
 		}
 
-		public int traducao(int enderecoLogico){
-			return enderecoLogico*tamPart;
+		public int traducao(int enderecoLogico,int offset){
+			//System.out.println(enderecoLogico*tamPart+offset);
+			return enderecoLogico*tamPart+offset;
 		}
 	}
 
@@ -642,6 +662,7 @@ public class Sistema {
 		public ArrayList<PCBpaginacao> listaDeProcessosProntosPaginacao = new ArrayList<>();
 		public GMParticao gmParticao=null;
 		public GMPaginacao gmPaginacao=null;
+		private int idProcessos=0;
 
 		public GP(GMParticao GM) {
 			this.gmParticao = GM;
@@ -658,9 +679,23 @@ public class Sistema {
 			return null;
 		}
 
+		public PCBparticao getProcessoRodandoParticao(){
+			for (PCBparticao processo:listaDeProcessosProntosParticao) {
+				if(Objects.equals(processo.getEstado(), "Rodando")) return processo;
+			}
+			return null;
+		}
+
 		public PCBpaginacao getProcessoPeloIdPaginacao(int id){
 			for (PCBpaginacao processo:listaDeProcessosProntosPaginacao) {
 				if(processo.getId()==id) return processo;
+			}
+			return null;
+		}
+
+		public PCBpaginacao getProcessoRodandoPaginacao(){
+			for (PCBpaginacao processo:listaDeProcessosProntosPaginacao) {
+				if(Objects.equals(processo.getEstado(), "Rodando")) return processo;
 			}
 			return null;
 		}
@@ -674,9 +709,9 @@ public class Sistema {
 				//programa maior que a particao
 				if(enderecoLogico == -1)return false;
 				else{
-					int id = listaDeProcessosProntosParticao.size();
+					int id = this.idProcessos++;
 					int particao = gmParticao.carga(enderecoLogico,programa);
-					int enderecoFisico = gmParticao.traducao(enderecoLogico);
+					int enderecoFisico = gmParticao.traducao(enderecoLogico,0);
 					PCBparticao pcb = new PCBparticao(id,particao, enderecoFisico, enderecoFisico + (gmParticao.tamPart-1));
 					listaDeProcessosProntosParticao.add(pcb);
 					return true;
@@ -687,7 +722,7 @@ public class Sistema {
 
 				if(!temEspaco) return false;
 				else{
-					int id = listaDeProcessosProntosPaginacao.size();
+					int id = this.idProcessos++;
 					ArrayList<Pagina> tabelaDePaginasTraduzida = gmPaginacao.carga(programa,tabelaDePaginas);
 					PCBpaginacao pcb = new PCBpaginacao(id,tabelaDePaginasTraduzida);
 					listaDeProcessosProntosPaginacao.add(pcb);
@@ -698,17 +733,23 @@ public class Sistema {
 
 		public void desalocaProcesso(int id){
 			if(gmParticao!=null){
+				PCBparticao processoASerRemovido = null;
 				for (PCBparticao processo:listaDeProcessosProntosParticao) {
 					if(processo.getId() == id){
 						int enderecoLogico = processo.getParticao();
 						gmParticao.desaloca(enderecoLogico);
 
-						for (int i = (gmParticao.traducao(processo.particao));i< processo.limit;i++) {
+						for (int i = (gmParticao.traducao(processo.particao,0));i< processo.limit;i++) {
 							gmParticao.memory.m[i] = new Word(Opcode.___, -1,-1,-1);
 						}
+						processoASerRemovido = processo;
 					}
 				}
+
+				if(processoASerRemovido!=null)listaDeProcessosProntosParticao.remove(processoASerRemovido);
+				else System.out.println("Processo nao encontrado");
 			}else {
+				PCBpaginacao processoASerRemovido = null;
 				for (PCBpaginacao processo:listaDeProcessosProntosPaginacao) {
 					if(processo.getId() == id){
 						ArrayList<Integer> enderecosLogicosPagina = new ArrayList<>();
@@ -721,15 +762,18 @@ public class Sistema {
 						}
 
 						gmPaginacao.desalocaPaginas(enderecosLogicosPagina);
+						processoASerRemovido = processo;
 					}
 				}
+				if(processoASerRemovido!=null)listaDeProcessosProntosPaginacao.remove(processoASerRemovido);
+				else System.out.println("Processo nao encontrado");
 			}
 		}
 	}
 
 	public class PCBparticao {
 		private int id;
-		private String state;
+		private String estado;
 		private int particao;
 		private int pc;
 		private int limit;
@@ -737,7 +781,7 @@ public class Sistema {
 
 		public PCBparticao(int id, int particao,int pc,int limit) {
 			this.id = id;
-			this.state = "Ready";
+			this.estado = "Pronto";
 			this.particao = particao;
 			this.pc = pc;
 			this.limit = limit;
@@ -751,12 +795,12 @@ public class Sistema {
 			this.id = id;
 		}
 
-		public String getState() {
-			return state;
+		public String getEstado() {
+			return estado;
 		}
 
-		public void setState(String state) {
-			this.state = state;
+		public void setEstado(String estado) {
+			this.estado = estado;
 		}
 
 		public int getParticao() {
@@ -770,12 +814,12 @@ public class Sistema {
 
 	public class PCBpaginacao {
 		private int id;
-		private String state;
+		private String estado;
 		private ArrayList<Pagina> tabelaDePaginas;
 
 		public PCBpaginacao(int id, ArrayList<Pagina> tabelaDePaginas) {
 			this.id = id;
-			this.state = "Ready";
+			this.estado = "Pronto";
 			this.tabelaDePaginas = tabelaDePaginas;
 		}
 
@@ -787,12 +831,12 @@ public class Sistema {
 			this.id = id;
 		}
 
-		public String getState() {
-			return state;
+		public String getEstado() {
+			return estado;
 		}
 
-		public void setState(String state) {
-			this.state = state;
+		public void setEstado(String estado) {
+			this.estado = estado;
 		}
 
 		public ArrayList<Pagina> getTabelaDePaginas() {
@@ -837,14 +881,21 @@ public class Sistema {
 	public InterruptHandling ih;
 	public SysCallHandling sysCall;
 	public static Programas progs;
+	public GP gp;
 
-    public Sistema(){   // a VM com tratamento de interrupções
-		 ih = new InterruptHandling();
-         sysCall = new SysCallHandling();
-		 vm = new VM(ih, sysCall);
-		 sysCall.setVM(vm);
-		 progs = new Programas();
+	public Sistema(){   // a VM com tratamento de interrupções
+		ih = new InterruptHandling();
+		sysCall = new SysCallHandling();
+		vm = new VM(ih, sysCall);
+		sysCall.setVM(vm);
+		progs = new Programas();
 
+		//cria gerente memoria
+		//GMParticao gm = new GMParticao(64,vm.mem);
+		GMPaginacao gm = new GMPaginacao(vm.mem.tamMem,8,vm.mem);
+
+		//cria gerente de processos
+		gp = new GP(gm);
 	}
 
 	public static class InterfaceUsuario {
@@ -879,23 +930,23 @@ public class Sistema {
 							boolean result;
 							switch (programa) {
 								case "1" -> {
-									result = s.vm.gp.criaProcesso(progs.fatorial);
+									result = s.gp.criaProcesso(progs.fatorial);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "2" -> {
-									result = s.vm.gp.criaProcesso(progs.fatorialTRAP);
+									result = s.gp.criaProcesso(progs.fatorialTRAP);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "3" -> {
-									result = s.vm.gp.criaProcesso(progs.progMinimo);
+									result = s.gp.criaProcesso(progs.progMinimo);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "4" -> {
-									result = s.vm.gp.criaProcesso(progs.fibonacci10);
+									result = s.gp.criaProcesso(progs.fibonacci10);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "5" -> {
-									result = s.vm.gp.criaProcesso(progs.PC);
+									result = s.gp.criaProcesso(progs.PC);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								default -> System.out.println("Opcao invalida");
@@ -934,7 +985,7 @@ public class Sistema {
 							idString = scanner.nextLine();
 							id = Integer.parseInt(idString);
 
-							s.vm.gp.desalocaProcesso(id);
+							s.gp.desalocaProcesso(id);
 							break;
 						case "7":
 							if (s.vm.cpu.debug){
@@ -971,13 +1022,13 @@ public class Sistema {
 	public static void main(String args[]) {
 		Sistema s = new Sistema();
 		new InterfaceUsuario(s);
+
 		//s.loadAndExec(progs.fibonacci10);
 		//s.loadAndExec(progs.progMinimo);
 		//s.loadAndExec(progs.fatorial);
 		//s.loadAndExec(progs.fatorialTRAP); // saida
 		//s.loadAndExec(progs.fibonacciTRAP); // entrada
 		//s.loadAndExec(progs.PC); // bubble sort
-			
 	}
 
 
@@ -1011,7 +1062,15 @@ public class Sistema {
 			new Word(Opcode.STD, 0, -1, 12), 
 			new Word(Opcode.STD, 0, -1, 13), 
 			new Word(Opcode.STD, 0, -1, 14), 
-			new Word(Opcode.STOP, -1, -1, -1) };
+			new Word(Opcode.STOP, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1),
+			   new Word(Opcode.DATA, -1, -1, -1)
+	   };
 
 	   public Word[] fibonacci10 = new Word[] { // mesmo que prog exemplo, so que usa r0 no lugar de r8
 			new Word(Opcode.LDI, 1, -1, 0), 
