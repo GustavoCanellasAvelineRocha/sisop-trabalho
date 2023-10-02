@@ -109,7 +109,7 @@ public class Sistema {
 			if(tabelaDePaginas==null) return e <= limite;
 			else {
 				for (Pagina processo:tabelaDePaginas) {
-					if (processo.pc<e && processo.limit>e) return true;
+					if (processo.pc<=e && processo.limit>=e) return true;
 				}
 				return false;
 			}
@@ -123,7 +123,7 @@ public class Sistema {
 			return true;
 		}
 		
-		public void setContext(int _base, int _limite, int _pc,ArrayList<Pagina> _tabelaDePaginas) {  // no futuro esta funcao vai ter que ser
+		public void setContext(int _base, int _limite, int _pc, ArrayList<Pagina> _tabelaDePaginas) {  // no futuro esta funcao vai ter que ser
 			base = _base;                                          // expandida para setar todo contexto de execucao,
 			limite = _limite;									   // agora,  setamos somente os registradores base,
 			pc = _pc;                                              // limite e pc (deve ser zero nesta versao)
@@ -153,22 +153,22 @@ public class Sistema {
 						    if (legal(ir.p)) {
 							   reg[ir.r1] = m[ir.p].p;
 							   pc++;
-						    }
+						    } else irpt = Interrupts.intEnderecoInvalido;
 						    break;
 
 						case LDX: // RD <- [RS] // NOVA
 							if (legal(reg[ir.r2])) {
 								reg[ir.r1] = m[reg[ir.r2]].p;
 								pc++;
-							}
+							} else irpt = Interrupts.intEnderecoInvalido;
 							break;
 
 						case STD: // [A] ← Rs
 						    if (legal(ir.p)) {
-							    m[ir.p].opc = Opcode.DATA;
-							    m[ir.p].p = reg[ir.r1];
-							    pc++;
-							};
+								m[ir.p].opc = Opcode.DATA;
+								m[ir.p].p = reg[ir.r1];
+								pc++;
+							} else irpt = Interrupts.intEnderecoInvalido;
 						    break;
 
 						case STX: // [Rd] ←Rs
@@ -176,7 +176,7 @@ public class Sistema {
 							    m[reg[ir.r1]].opc = Opcode.DATA;      
 							    m[reg[ir.r1]].p = reg[ir.r2];          
 								pc++;
-							};
+							} else irpt = Interrupts.intEnderecoInvalido;
 							break;
 						
 						case MOVE: // RD <- RS
@@ -326,7 +326,7 @@ public class Sistema {
 							break;
 					}
 				}
-				else break;
+
 			   // --------------------------------------------------------------------------------------------------
 			   // VERIFICA INTERRUPÇÃO !!! - TERCEIRA FASE DO CICLO DE INSTRUÇÕES
 				if (!(irpt == Interrupts.noInterrupt)) {   // existe interrupção
@@ -334,7 +334,7 @@ public class Sistema {
 					break; // break sai do loop da cpu
 				}
 			}  // FIM DO CICLO DE UMA INSTRUÇÃO
-		}      
+		}
 	}
     // ------------------ C P U - fim ------------------------------------------------------------------------
 	// -------------------------------------------------------------------------------------------------------
@@ -441,6 +441,7 @@ public class Sistema {
 			for (Pagina pagina:processo.tabelaDePaginas) {
 				vm.cpu.setContext(0, pagina.limit, pagina.pc,processo.tabelaDePaginas);
 				vm.cpu.run();
+				if(this.vm.cpu.irpt == Interrupts.intEnderecoInvalido)break;
 			}
 		}
 		return true;
@@ -688,7 +689,9 @@ public class Sistema {
 
 		public PCBpaginacao getProcessoPeloIdPaginacao(int id){
 			for (PCBpaginacao processo:listaDeProcessosProntosPaginacao) {
-				if(processo.getId()==id) return processo;
+				if(processo.getId()==id) {
+					return processo;
+				}
 			}
 			return null;
 		}
@@ -922,9 +925,9 @@ public class Sistema {
 						case "1":
 							System.out.println("Selecione o programa que deseja");
 							System.out.println("[1] fatorial");
-							System.out.println("[2] fatorialTRAP");
+							System.out.println("[2] fibonacci10");
 							System.out.println("[3] progMinimo");
-							System.out.println("[4] fibonacci10");
+							System.out.println("[4] fatorialTRAP");
 							System.out.println("[5] PC");
 							String programa = scanner.nextLine();
 							boolean result;
@@ -934,7 +937,7 @@ public class Sistema {
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "2" -> {
-									result = s.gp.criaProcesso(progs.fatorialTRAP);
+									result = s.gp.criaProcesso(progs.fibonacci10);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "3" -> {
@@ -942,7 +945,7 @@ public class Sistema {
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "4" -> {
-									result = s.gp.criaProcesso(progs.fibonacci10);
+									result = s.gp.criaProcesso(progs.fatorialTRAP);
 									System.out.println("Resultado da criacao:" + result);
 								}
 								case "5" -> {
