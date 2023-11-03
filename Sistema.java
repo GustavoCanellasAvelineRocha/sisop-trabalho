@@ -93,6 +93,7 @@ public class Sistema {
         private SysCallHandling sysCall;  // significa desvio para tratamento de chamadas de sistema - trap 
 		private boolean debug;            // se true entao mostra cada instrucao em execucao
 		private ArrayList<Pagina> tabelaDePaginas;
+		private int particao;
 						
 		public CPU(Memory _mem, InterruptHandling _ih, SysCallHandling _sysCall, boolean _debug) {     // ref a MEMORIA e interrupt handler passada na criacao da CPU
 			maxInt =  32767;        // capacidade de representacao modelada
@@ -106,13 +107,14 @@ public class Sistema {
 		}
 		
 		private boolean legal(int e) {                             // todo acesso a memoria tem que ser verificado
-			if(tabelaDePaginas==null) return e <= limite;
-			else {
-				for (Pagina processo:tabelaDePaginas) {
-					if (processo.pc<=e && processo.limit>=e) return true;
-				}
-				return false;
-			}
+//			if(tabelaDePaginas==null) return e <= limite;
+//			else {
+//				for (Pagina processo:tabelaDePaginas) {
+//					if (processo.pc<=e && processo.limit>=e) return true;
+//				}
+//				return false;
+//			}
+			return true;
 		}
 
 		private boolean testOverflow(int v) {                       // toda operacao matematica deve avaliar se ocorre overflow                      
@@ -130,15 +132,25 @@ public class Sistema {
 			irpt = Interrupts.noInterrupt;                         // reset da interrupcao registrada
 			tabelaDePaginas = _tabelaDePaginas;
 		}
+
+		public void setContextParticao(int _base, int _limite, int _pc,int _particao) {  // no futuro esta funcao vai ter que ser
+			base = _base;                                          // expandida para setar todo contexto de execucao,
+			limite = _limite;									   // agora,  setamos somente os registradores base,
+			pc = _pc;                                              // limite e pc (deve ser zero nesta versao)
+			irpt = Interrupts.noInterrupt;                         // reset da interrupcao registrada
+			particao = _particao;
+		}
 		
 		public void run() {
 			// execucao da CPU supoe que o contexto da CPU, vide acima, esta devidamente setado
 			while (true) { 			// ciclo de instrucoes. acaba cfe instrucao, veja cada caso.
 			   // --------------------------------------------------------------------------------------------------
 			   // FETCH
-				if (legal(pc)) { 	// pc valido
-					ir = m[pc]; 	// <<<<<<<<<<<<           busca posicao da memoria apontada por pc, guarda em ir
-					if (debug) { System.out.print("                               pc: "+pc+"       exec: ");  mem.dump(ir); }
+				int endereco;
+				//System.out.println("r0:"+reg[0] + " r1:"+reg[1]+" r2:"+reg[2]+" r3:"+reg[3]+" r4:"+reg[4]+" r5:"+reg[5]+" r6:"+reg[6]+" r7:"+reg[7]+" r8:"+reg[8]+" r9:"+reg[9]);
+				if (legal(endereco = gp.gmParticao.traducao(particao,pc))) { 	// pc valido
+					ir = m[endereco]; 	// <<<<<<<<<<<<           busca posicao da memoria apontada por pc, guarda em ir
+					if (debug) {System.out.print("                               pc: "+endereco+"       exec: ");  mem.dump(ir); }
 			   // --------------------------------------------------------------------------------------------------
 			   // EXECUTA INSTRUCAO NO ir
 					switch (ir.opc) {   // conforme o opcode (código de operação) executa
@@ -151,30 +163,30 @@ public class Sistema {
 
 						case LDD: // Rd <- [A]
 						    if (legal(ir.p)) {
-							   reg[ir.r1] = m[ir.p].p;
+							   reg[ir.r1] = m[gp.gmParticao.traducao(particao,ir.p)].p;
 							   pc++;
 						    } else irpt = Interrupts.intEnderecoInvalido;
 						    break;
 
 						case LDX: // RD <- [RS] // NOVA
 							if (legal(reg[ir.r2])) {
-								reg[ir.r1] = m[reg[ir.r2]].p;
+								reg[ir.r1] = m[gp.gmParticao.traducao(particao,reg[ir.r2])].p;
 								pc++;
 							} else irpt = Interrupts.intEnderecoInvalido;
 							break;
 
 						case STD: // [A] ← Rs
 						    if (legal(ir.p)) {
-								m[ir.p].opc = Opcode.DATA;
-								m[ir.p].p = reg[ir.r1];
+								m[gp.gmParticao.traducao(particao,ir.p)].opc = Opcode.DATA;
+								m[gp.gmParticao.traducao(particao,ir.p)].p = reg[ir.r1];
 								pc++;
 							} else irpt = Interrupts.intEnderecoInvalido;
 						    break;
 
 						case STX: // [Rd] ←Rs
 						    if (legal(reg[ir.r1])) {
-							    m[reg[ir.r1]].opc = Opcode.DATA;      
-							    m[reg[ir.r1]].p = reg[ir.r2];          
+							    m[gp.gmParticao.traducao(particao,reg[ir.r1])].opc = Opcode.DATA;
+							    m[gp.gmParticao.traducao(particao,reg[ir.r1])].p = reg[ir.r2];
 								pc++;
 							} else irpt = Interrupts.intEnderecoInvalido;
 							break;
@@ -267,43 +279,42 @@ public class Sistema {
 								} else {
 									pc++;
 								}
-							break; 
-	
-						case JMPIM: // PC <- [A]
-								 pc = m[ir.p].p;
-							 break; 
-	
-						case JMPIGM: // If RC > 0 then PC <- [A] else PC++
-								 if (reg[ir.r2] > 0) {
-									pc = m[ir.p].p;
-								} else {
-									pc++;
-								}
-							 break;  
-	
-						case JMPILM: // If RC < 0 then PC <- k else PC++
-								 if (reg[ir.r2] < 0) {
-									pc = m[ir.p].p;
-								} else {
-									pc++;
-								}
-							 break; 
-	
-						case JMPIEM: // If RC = 0 then PC <- k else PC++
-								if (reg[ir.r2] == 0) {
-									pc = m[ir.p].p;
-								} else {
-									pc++;
-								}
-							 break; 
-	
+							break;
+
+						case JMPIM:// Here
+							pc = m[gp.gmParticao.traducao(particao,ir.p)].p;
+							break;
+
+						case JMPIGM: // if Rc > 0 then PC <- [A] Else PC <- PC +1 // Here
+							if (reg[ir.r2] > 0) {
+								pc = m[gp.gmParticao.traducao(particao,ir.p)].p;
+							} else {
+								pc++;
+							}
+							break;
+
+						case JMPILM: // if Rc < 0 then PC <- [A] Else PC <- PC +1 //Here
+							if (reg[ir.r2] < 0) {
+								pc = m[gp.gmParticao.traducao(particao,ir.p)].p;
+							} else {
+								pc++;
+							}
+							break;
+
+						case JMPIEM: // if Rc = 0 then PC <- [A] Else PC <- PC +1
+							if (reg[ir.r2] == 0) {
+								pc = m[gp.gmParticao.traducao(particao,ir.p)].p;
+							} else {
+								pc++;
+							}
+							break;
 						case JMPIGT: // If RS>RC then PC <- k else PC++
 								if (reg[ir.r1] > reg[ir.r2]) {
-									pc = ir.p;
+									pc = m[gp.gmParticao.traducao(particao,ir.p)].p;
 								} else {
 									pc++;
 								}
-							 break; 
+							 break;
 
 					// outras
 						case STOP: // por enquanto, para execucao
@@ -325,7 +336,7 @@ public class Sistema {
 							irpt = Interrupts.intInstrucaoInvalida;
 							break;
 					}
-				}
+				}else irpt = Interrupts.intEnderecoInvalido;
 
 			   // --------------------------------------------------------------------------------------------------
 			   // VERIFICA INTERRUPÇÃO !!! - TERCEIRA FASE DO CICLO DE INSTRUÇÕES
@@ -336,6 +347,7 @@ public class Sistema {
 			}  // FIM DO CICLO DE UMA INSTRUÇÃO
 		}
 	}
+
     // ------------------ C P U - fim ------------------------------------------------------------------------
 	// -------------------------------------------------------------------------------------------------------
 
@@ -426,7 +438,7 @@ public class Sistema {
 			if(processoRodando!=null) processoRodando.setEstado("Pronto");
 
 			processo.setEstado("Rodando");
-			vm.cpu.setContext(0,processo.limit, processo.pc,null);
+			vm.cpu.setContextParticao(0,0, 0,processo.particao);
 			vm.cpu.run();
 		}else{
 			PCBpaginacao processo = this.gp.getProcessoPeloIdPaginacao(id);
@@ -456,11 +468,11 @@ public class Sistema {
 				System.out.println();
 				System.out.println("Id do processo: " + processo.id);
 				System.out.println("Particao do processo: " + processo.particao);
-				System.out.println("Program Counter do processo: " + processo.pc);
-				System.out.println("Limite do processo: " + processo.limit);
 				System.out.println("Estado do processo:" + processo.estado);
 				System.out.println("Conteudo do processo:");
-				this.vm.mem.dump(processo.pc,processo.limit+1);
+				int enderecoFisicoInicial = this.gp.gmParticao.traducao(processo.particao,0);
+				int enderecoFisicoFinal = enderecoFisicoInicial + this.gp.gmParticao.tamPart;
+				this.vm.mem.dump(enderecoFisicoInicial,enderecoFisicoFinal);
 			}
 		}else{
 			var processo = this.gp.getProcessoPeloIdPaginacao(id);
@@ -498,8 +510,6 @@ public class Sistema {
 					System.out.println();
 					System.out.println("Id do processo = " + processo.id);
 					System.out.println("Particao do processo = " + processo.particao);
-					System.out.println("Program Counter do processo = " + processo.pc);
-					System.out.println("Limite do processo = " + processo.limit);
 					System.out.println("Estado do processo = " + processo.estado);
 				}
 			}
@@ -572,7 +582,7 @@ public class Sistema {
 		}
 
 		public int traducao(int enderecoLogico,int offset){
-			//System.out.println(enderecoLogico*tamPart+offset);
+			System.out.println(enderecoLogico*tamPart+offset);
 			return enderecoLogico*tamPart+offset;
 		}
 	}
@@ -742,7 +752,10 @@ public class Sistema {
 						int enderecoLogico = processo.getParticao();
 						gmParticao.desaloca(enderecoLogico);
 
-						for (int i = (gmParticao.traducao(processo.particao,0));i< processo.limit;i++) {
+						int enderecoFisicoInicio = gmParticao.traducao(processo.particao,0);
+						int enderecoFisicoFinal = enderecoFisicoInicio+gmParticao.tamPart;
+
+						for (int i = enderecoFisicoInicio;i< enderecoFisicoFinal;i++) {
 							gmParticao.memory.m[i] = new Word(Opcode.___, -1,-1,-1);
 						}
 						processoASerRemovido = processo;
@@ -778,16 +791,14 @@ public class Sistema {
 		private int id;
 		private String estado;
 		private int particao;
-		private int pc;
-		private int limit;
+
 
 
 		public PCBparticao(int id, int particao,int pc,int limit) {
 			this.id = id;
 			this.estado = "Pronto";
 			this.particao = particao;
-			this.pc = pc;
-			this.limit = limit;
+
 		}
 
 		public int getId() {
@@ -894,8 +905,8 @@ public class Sistema {
 		progs = new Programas();
 
 		//cria gerente memoria
-		//GMParticao gm = new GMParticao(64,vm.mem);
-		GMPaginacao gm = new GMPaginacao(vm.mem.tamMem,8,vm.mem);
+		GMParticao gm = new GMParticao(64,vm.mem);
+		//GMPaginacao gm = new GMPaginacao(vm.mem.tamMem,8,vm.mem);
 
 		//cria gerente de processos
 		gp = new GP(gm);
@@ -928,29 +939,34 @@ public class Sistema {
 							System.out.println("[2] fibonacci10");
 							System.out.println("[3] progMinimo");
 							System.out.println("[4] fatorialTRAP");
-							System.out.println("[5] PC");
+							System.out.println("[5] PB");
+							System.out.println("[6] PC");
 							String programa = scanner.nextLine();
 							boolean result;
 							switch (programa) {
 								case "1" -> {
 									result = s.gp.criaProcesso(progs.fatorial);
-									System.out.println("Resultado da criacao:" + result);
+									System.out.println("Resultado da criacao: " + result);
 								}
 								case "2" -> {
 									result = s.gp.criaProcesso(progs.fibonacci10);
-									System.out.println("Resultado da criacao:" + result);
+									System.out.println("Resultado da criacao: " + result);
 								}
 								case "3" -> {
 									result = s.gp.criaProcesso(progs.progMinimo);
-									System.out.println("Resultado da criacao:" + result);
+									System.out.println("Resultado da criacao: " + result);
 								}
 								case "4" -> {
 									result = s.gp.criaProcesso(progs.fatorialTRAP);
-									System.out.println("Resultado da criacao:" + result);
+									System.out.println("Resultado da criacao: " + result);
 								}
 								case "5" -> {
+									result = s.gp.criaProcesso(progs.PB);
+									System.out.println("Resultado da criacao: " + result);
+								}
+								case "6" -> {
 									result = s.gp.criaProcesso(progs.PC);
-									System.out.println("Resultado da criacao:" + result);
+									System.out.println("Resultado da criacao: " + result);
 								}
 								default -> System.out.println("Opcao invalida");
 							}
