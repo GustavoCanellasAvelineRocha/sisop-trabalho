@@ -6,8 +6,7 @@ O código esta completo, com todas as funcionalidades implementeadas.
 
 # Casos de teste:
 
-Criamos varios tipos de testes no menu, tendo em vista que ao usuario pedir para criar um processo ele rodará imediatamente, fica dificil verificar a concorrencia, desse modo,
-existe a opcao para criar diversos processos de uma so vez, sendo eles:
+Criamos vários tipos de testes no menu, tendo em vista que, ao usuário pedir para criar um processo, ele rodará imediatamente. Fica difícil verificar a concorrência. Desse modo, existe a opção para criar diversos processos de uma só vez, sendo eles:
 
 [1] 3 processos sem trap
 [2] 3 processos com 1 trap de in
@@ -16,25 +15,22 @@ existe a opcao para criar diversos processos de uma so vez, sendo eles:
 [5] Todos processos sem traps
 [6] Todos processos com trap
 
-Os processos com trap devem ser respondidos pelo usuario pelo numero 8 no menu, para eles serem finalizados.
+Os processos com trap devem ser respondidos pelo usuário pelo número 8 no menu, para que eles sejam finalizados.
 
 [8] Responder Pedido IO
 
-Outro ponto importante a se falar dos testes sao as opcoes 6 e 7, sendo elas:
+Outro ponto importante a se falar dos testes são as opções 6 e 7, sendo elas:
 
 [6] Liga/Desliga dump de resultado
 [7] Trace ON/Trace OFF
 
-A maquina virtual por definicao vem com o dump do resultado e o trace(cada comando executado pela maquina ser printado) desligados, assim sendo possivel apenas ver as interrupcoes
-de escalonamento,stop,io,etc. 
+A máquina virtual, por definição, vem com o dump do resultado e o trace (cada comando executado pela máquina ser printado) desligados. Assim sendo, é possível apenas ver as interrupções de escalonamento, stop, IO, etc.
 
-Dessa forma, caso seja de interesse ver o resultado de cada processo, deve se ligar o dump do resultado, que printa na tela o processo antes dele ser desalocado pela interrupcao stop
-Alem disso, caso queira ver cada linha de codigo executada, tambem é possivel ver com trace on ligado.
+Dessa forma, caso seja de interesse ver o resultado de cada processo, deve-se ligar o dump do resultado, que printa na tela o processo antes dele ser desalocado pela interrupção stop. Além disso, caso queira ver cada linha de código executada, também é possível ver com trace on ligado.
 
-Agora irei deixar o resultado esperado de cada execucao concorrentemente com o dump de resultado ligado.
+Agora irei deixar o resultado esperado de cada execução, concorrentemente com o dump de resultado ligado.
 
-Observacao 1: A ordem dos prints podem mudar dependendo da execucao, pois se tratando de um processo concorrente, talvez os prints possam ser alterados, todavia o dump da memoria sera o mesmo.
-Observacao 2: Os resultados serao printados usando o Gerente de memoria de paginacao, todavia, tambem é possivel usar o gerente de memoria de particao, isso apenas ira diferenciar o dump da memoria.
+Observação 1: A ordem dos prints podem mudar dependendo da execução, pois se tratando de um processo concorrente, talvez os prints possam ser alterados, todavia o dump da memória será o mesmo. Observação 2: Os resultados serão printados usando o Gerente de memória de paginação, todavia, também é possível usar o gerente de memória de partição; isso apenas irá diferenciar o dump da memória.
 
 # Caso 1: 
 
