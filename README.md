@@ -4,7 +4,7 @@ Alunos: GustavoAvelineRocha,LeonardoPreczevskiRamos,RodrigoRosaRenck
 
 O código esta completo, com todas as funcionalidades implementeadas.
 
-Casos de teste:
+# Casos de teste:
 
 Criamos varios tipos de testes no menu, tendo em vista que ao usuario pedir para criar um processo ele rodará imediatamente, fica dificil verificar a concorrencia, desse modo,
 existe a opcao para criar diversos processos de uma so vez, sendo eles:
@@ -36,7 +36,7 @@ Agora irei deixar o resultado esperado de cada execucao concorrentemente com o d
 Observacao 1: A ordem dos prints podem mudar dependendo da execucao, pois se tratando de um processo concorrente, talvez os prints possam ser alterados, todavia o dump da memoria sera o mesmo.
 Observacao 2: Os resultados serao printados usando o Gerente de memoria de paginacao, todavia, tambem é possivel usar o gerente de memoria de particao, isso apenas ira diferenciar o dump da memoria.
 
-Caso 1: 
+# Caso 1: 
 
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 0
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 1
@@ -152,7 +152,8 @@ Conteudo do processo:
 46:  [ DATA, -1, -1, 55  ] 
 47:  [ ___, -1, -1, -1  ] 
 
-Caso 2:                                        Interrupcao intTimeSliceFinish   pc: 5   id: 3  
+# Caso 2:                                        
+                                              Interrupcao intTimeSliceFinish   pc: 5   id: 3  
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 4
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 5
                                                Interrupcao intTimeSliceFinish   pc: 6   id: 3
@@ -279,7 +280,7 @@ Conteudo do processo:
 38:  [ ___, -1, -1, -1  ] 
 39:  [ ___, -1, -1, -1  ] 
 
-Caso 3:
+# Caso 3:
 
                                                Chamada de Sistema com op  /  par:  1 / 56  ID: 7
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 8
@@ -483,9 +484,9 @@ Conteudo do processo:
 94:  [ ___, -1, -1, -1  ] 
 95:  [ ___, -1, -1, -1  ] 
 
-caso 4: Igual aos casos acima, entretanto sendo necessario fazer duas vezes a resposta de IO.
+# caso 4: Igual aos casos 2 e 3 juntos, entretanto sendo necessario fazer duas vezes a resposta de IO.
 
-caso 5:
+# caso 5:
 
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 9
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 10
@@ -756,7 +757,7 @@ Conteudo do processo:
 150:  [ ___, -1, -1, -1  ] 
 151:  [ ___, -1, -1, -1  ] 
 
-Caso 6:
+# Caso 6:
 
                                                Interrupcao intTimeSliceFinish   pc: 5   id: 16
                                                Chamada de Sistema com op  /  par:  1 / 56  ID: 17
