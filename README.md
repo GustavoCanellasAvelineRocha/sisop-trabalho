@@ -40,7 +40,6 @@ Observação 1: A ordem dos prints podem mudar dependendo da execução, pois se
                                                Interrupcao intTimeSliceFinish   pc: 6   id: 0
                                                Interrupcao intTimeSliceFinish   pc: 10   id: 1
                                                Interrupcao intSTOP   pc: 6   id: 2
-
 Id do processo = 2
 Estado do processo = finalizado
 Pagina do processo = 6
